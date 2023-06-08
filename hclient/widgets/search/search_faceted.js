@@ -698,6 +698,32 @@ $.widget( "heurist.search_faceted", {
     //
     ,doReset: function(){
 
+        var that = this;
+
+        let primary_rt = this.options.params.rectypes[0];
+        let need_linked_rectypes = !window.hWin.HEURIST4.util.isempty(this.options.params.spatial_filter) 
+                                    && !window.hWin.HEURIST4.dbs.hasFields(primary_rt, 'geo', null);
+
+        if(need_linked_rectypes && !window.hWin.HEURIST4.rectypes?.typedefs?.[primary_rt]){
+
+            let request = {
+                rectypes: primary_rt, 
+                mode: 2, 
+                db: window.hWin.HAPI4.database
+            };
+
+            window.hWin.HAPI4.SystemMgr.get_defs(request, function(response){
+                if(response.status == window.hWin.ResponseStatus.OK){
+                    window.hWin.HEURIST4 = $.extend(window.hWin.HEURIST4, response.data);
+                    that.doReset();
+                }else{
+                    window.hWin.HEURIST4.msg.showMsgErr(response);
+                }
+            });
+
+            return;
+        }
+
         $(this.document).trigger(window.hWin.HAPI4.Event.ON_REC_SEARCHSTART, [ 
             {reset:true, 
              search_realm:this.options.search_realm, 
@@ -2379,16 +2405,43 @@ $.widget( "heurist.search_faceted", {
                             
                             if(field['type']=="date"){
                                 
-                                if(mmin.indexOf("-00")>0){
-                                    mmin = mmin.replaceAll("-00","-01");
-                                }
-                                if(mmax.indexOf("-00")>0){ //|| mmax.indexOf("-01-01")>0
-                                    let to_replace = mmax.indexOf("-00-00")>0 ? "-00-00" : "-01-01";
-                                    mmax = mmax.replaceAll('-00','-01');
+                                function __toDt(val){ //from decimal to datetime
+                                    
+                                    if(Math.round(val) == val){ //years
+                                        val = Math.round(val)+'-01-01';
+                                    }else{
+                                        //
+                                        var month = val.substr(5,2);
+                                        var day = val.substr(7);
+                                        
+                                        val = Math.round(val)
+                                            +'-'+((month==0)?'01':month.lpad('0',2))
+                                            +'-'+((day==0)?'01':day.lpad('0',2))
+                                    }
+                                    
+                                    return val;
                                 }
                                 
-                                mmin = mmin.replace(' ','T');                                                                     
-                                mmax = mmax.replace(' ','T');
+                                if(mmin.indexOf('-')<0){
+                                    mmin = __toDt(mmin);    
+                                }else{
+                                    if(mmin.indexOf("-00")>0){
+                                        mmin = mmin.replaceAll("-00","-01");
+                                    }
+                                    mmin = mmin.replace(' ','T');                                                                     
+                                }
+                                
+                                if(mmax.indexOf('-')<0){
+                                    mmax = __toDt(mmax);
+                                }else{
+                                    if(mmax.indexOf("-00")>0){ //|| mmax.indexOf("-01-01")>0
+                                        let to_replace = mmax.indexOf("-00-00")>0 ? "-00-00" : "-01-01";
+                                        mmax = mmax.replaceAll('-00','-01');
+                                    }
+                                    mmax = mmax.replace(' ','T');
+                                }
+console.log(mmin+'   '+mmax);                                
+                                
                                 mmin = Date.parse(mmin); 
                                 mmax = Date.parse(mmax); 
 

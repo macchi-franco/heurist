@@ -73,6 +73,34 @@ class ReportRecord {
     public function baseURL(){
         return HEURIST_BASE_URL;
     }
+
+    //
+    //
+    //
+    public function getSysInfo($param){
+        
+        $res = null;
+        $mysqli = $this->system->get_mysqli();
+        
+        if($param=='db_total_records'){
+            
+            $res = mysql__select_value($mysqli, 'SELECT count(*) FROM Records WHERE not rec_FlagTemporary');
+
+        }else if($param=='db_rty_counts'){
+
+            $res = mysql__select_assoc2($mysqli, 'SELECT rec_RecTypeID, count(*) FROM Records WHERE not rec_FlagTemporary GROUP BY rec_RecTypeID');
+        }
+        
+        return $res;
+    }
+    
+    //
+    //
+    //
+    public function rty_Name($rty_ID){
+        return  $this->rty_Names[$rty_ID];
+    }
+
     
     //
     // Returns local code for given concept code
@@ -226,10 +254,10 @@ class ReportRecord {
                                     $record["recRelationNotes"] = $value['Notes'];
                                 }
                                 if(array_key_exists('StartDate', $value)){
-                                    $record["recRelationStartDate"] = temporalToHumanReadableString($value['StartDate']);
+                                    $record["recRelationStartDate"] = Temporal::toHumanReadable($value['StartDate']);
                                 }
                                 if(array_key_exists('EndDate', $value)){
-                                    $record["recRelationEndDate"] = temporalToHumanReadableString($value['EndDate']);
+                                    $record["recRelationEndDate"] = Temporal::toHumanReadable($value['EndDate']);
                                 }
                                 
                                 array_push($res, $record);
@@ -495,8 +523,8 @@ class ReportRecord {
                             $origvalues = array();
                             foreach ($dtValue as $key => $value){
                                 if(strlen($res)>0) $res = $res.", ";
-                                $res = $res.temporalToHumanReadableString($value);
-                                array_push($origvalues, temporalToHumanReadableString($value));
+                                $res = $res.Temporal::toHumanReadable($value);
+                                array_push($origvalues, Temporal::toHumanReadable($value));
                             }
                             if(strlen($res)==0){ //no valid terms
                                 $res = null;

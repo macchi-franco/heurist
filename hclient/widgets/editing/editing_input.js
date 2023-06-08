@@ -459,6 +459,22 @@ $.widget( "heurist.editing_input", {
             this._refresh();    
         }
     },
+    
+    //
+    //
+    //
+    _removeTooltip: function(id){
+
+        if(this.tooltips && this.tooltips[id]){
+            var $tooltip = this.tooltips[id];
+            if($tooltip && $tooltip.tooltip('instance') != undefined){
+                $tooltip.tooltip('destroy');
+                $tooltip = null;
+            }
+            this.tooltips[id] = null;
+            delete this.tooltips[id];
+        }
+    },
 
     // events bound via _on are removed automatically
     // revert other modifications here
@@ -482,6 +498,8 @@ $.widget( "heurist.editing_input", {
         if(this.inputs){
             $.each(this.inputs, function(index, input){ 
 
+                    that._removeTooltip(input.attr('id'));
+
                     if(that.detailType=='blocktext'){
                         var eid = '#'+input.attr('id')+'_editor';
                         //tinymce.remove('#'+input.attr('id')); 
@@ -498,9 +516,12 @@ $.widget( "heurist.editing_input", {
                     that.element.find('#'+$(input).attr('id')+'-2').remove();
                     
                     input.remove();
+                    
+                    
             } );
             this.input_cell.remove();
         }
+        this.tooltips = {};
     },
 
     /**
@@ -570,6 +591,8 @@ $.widget( "heurist.editing_input", {
     _removeInput: function(input_id){
 
         var that = this;
+        
+        this._removeTooltip(input_id);        
 
         if(this.inputs.length>1 && this.enum_buttons == null){
 
@@ -890,6 +913,26 @@ $.widget( "heurist.editing_input", {
                                         that._addHeuristMedia();
                                     }
                                 });                                        
+                                editor.ui.registry.addButton('customAddFigCaption', {
+                                    text: 'Add caption',
+                                    tooltip: 'Add caption to current media',
+                                    onAction: function (_) {
+                                        that._addMediaCaption();
+                                    },
+                                    onSetup: function (button) {
+
+                                        const activateButton = function(e){
+
+                                            //let is_disabled = e.element.nodeName.toLowerCase() !== 'img'; // is image element
+                                            button.setDisabled(e.element.nodeName.toLowerCase() !== 'img');
+                                        };
+
+                                        editor.on('NodeChange', activateButton);
+                                        return function(button){
+                                            editor.off('NodeChange', activateButton);
+                                        }
+                                    }
+                                });
                             }else{
                                 editor.addButton('customHeuristMedia', {
                                     icon: 'image',
@@ -968,7 +1011,7 @@ $.widget( "heurist.editing_input", {
                             'media table paste help autoresize'  //insertdatetime  wordcount
                         ],      
                         //undo redo | code insert  |  fontselect fontsizeselect |  forecolor backcolor | media image link | alignleft aligncenter alignright alignjustify | fullscreen            
-                        toolbar: ['formatselect | bold italic forecolor blockquote | customHeuristMedia link | align | bullist numlist outdent indent | table | removeformat | help'],
+                        toolbar: ['formatselect | bold italic forecolor blockquote | customHeuristMedia customAddFigCaption link | align | bullist numlist outdent indent | table | removeformat | help'],
                         /*formats: { q: {block: 'q'} },
                         style_formats: [ {title: 'Quotation', format: 'q'} ],*/
                         block_formats: 'Paragraph=p;Heading 1=h1;Heading 2=h2;Heading 3=h3;Heading 4=h4;Heading 5=h5;Heading 6=h6;Preformatted=pre;Quotation=blockquote',
@@ -2315,6 +2358,9 @@ $.widget( "heurist.editing_input", {
                         window.hWin.HEURIST4.ui.showEntityDialog('recUploadedFiles', popup_opts);
                     }
                 });
+                if(!f_id || f_id < 0){
+                    $edit_details.hide();
+                }
                 
                 /* Change Handler */
                 $input.change(function(event){
@@ -2338,6 +2384,7 @@ $.widget( "heurist.editing_input", {
                             $dwnld = $($container.find('a#dwn'+f_id)[0]);
                             $player = $($container.find('div#player'+f_id)[0]);
                             $thumbnail = $($container.find('img#img'+f_id)[0]);
+                            $edit_metadata = $($container.find('.edit_metadata')[0]);
 
                             $show.attr({'id':'lnk'+n_id});
 
@@ -2351,6 +2398,12 @@ $.widget( "heurist.editing_input", {
                             f_nonce = n_nonce;
                             dwnld_link = n_dwnld_link;
                             url = n_url;
+
+                            if(!n_id || n_id < 1){
+                                $edit_metadata.hide();
+                            }else{
+                                $edit_metadata.show();
+                            }
                         }
                         
                     }
@@ -5036,6 +5089,8 @@ console.log('onpaste');
     //         
     _addHeuristMedia: function(){
 
+        var that = this;
+
         var popup_options = {
             isdialog: true,
             select_mode: 'select_single',
@@ -5057,7 +5112,8 @@ console.log('onpaste');
 
                         var playerTag = recordset.fld(record,'ulf_PlayerTag');
 
-                        tinymce.activeEditor.insertContent( playerTag );
+                        that._addMediaCaption(playerTag);
+
                     }
 
                 }//data
@@ -5068,6 +5124,66 @@ console.log('onpaste');
         window.hWin.HEURIST4.ui.showEntityDialog('recUploadedFiles', popup_options);
     },
 
+    //
+    // Add caption to media
+    //
+    _addMediaCaption: function(content = null){
+
+        let is_insert = false;
+        let node = null;
+
+        if(content){
+            is_insert = true;
+        }else{
+
+            node = tinymce.activeEditor.selection.getNode();
+            if(node.parentNode.nodeName.toLowerCase() == 'figure'){ // insert new figcaption
+                node = document.createElement('figcaption');
+                tinymce.activeEditor.selection.getNode().parentNode.appendChild(node);
+            }else{ // replace selected content with new wrapper
+                node = null;
+            }
+
+            content = tinymce.activeEditor.selection.getContent();
+        }
+
+        let $dlg;
+        let msg = 'Enter a caption below, if you want one:<br><br>'
+            + '<textarea rows="6" cols="65" id="figcap"></textarea>';
+        
+        let btns = {};
+        btns[window.HR('Add caption')] = () => {
+            let caption = $dlg.find('#figcap').val();
+
+            if(caption){
+
+                if(node != null){
+                    node.innerText = caption;
+                    return;
+                }
+                content = '<figure>'+ content +'<figcaption>'+ caption +'</figcaption></figure>';
+
+                if(is_insert){
+                    tinymce.activeEditor.insertContent( content );
+                }else{
+                    tinymce.activeEditor.selection.setContent( content );
+                }
+            }
+
+            $dlg.dialog('close');
+        };
+        btns[window.HR('No caption')] = () => {
+            if(is_insert){
+                tinymce.activeEditor.insertContent( content );
+            }
+            $dlg.dialog('close');
+        };
+
+        $dlg = window.hWin.HEURIST4.msg.showMsgDlg(msg, btns, 
+            {title: 'Adding caption to media', yes: window.HR('Add caption'), no: window.HR('No caption')}, 
+            {default_palette_class: 'ui-heurist-populate'}
+        );
+    },
 
     //
     //
@@ -5095,18 +5211,49 @@ console.log('onpaste');
         var that = this;
 
         function __onDateChange(){
+
             var value = $input.val();
             
             that.newvalues[$input.attr('id')] = value; 
             
             if(that.options.dtID>0){
+                
                 var isTemporalValue = value && value.search(/\|VER/) != -1; 
                 if(isTemporalValue) {
                     window.hWin.HEURIST4.ui.setValueAndWidth($input, temporalToHumanReadableString(value));    
+
+                    var temporal = new Temporal(value);
+                    var content = '<p>'+temporal.toReadableExt('<br>')+'</p>';
+                    
+                    var $tooltip = $input.tooltip({
+                        items: "input.ui-widget-content",
+                        position: { // Post it to the right of $input
+                            my: "left+20 center",
+                            at: "right center",
+                            collision: "none"
+                        },
+                        show: { // Add slight delay to show
+                            delay: 500,
+                            duration: 0
+                        },
+                        content: function(){ // Provide text
+                            return content;
+                        },
+                        open: function(event, ui){ // Add custom CSS + class
+                            ui.tooltip.css({
+                                "width": "200px",
+                                "background": "rgb(209, 231, 231)",
+                                "font-size": "1.1em"
+                            })//.addClass('ui-heurist-populate');
+                        }
+                    });
+                    if(!that.tooltips) that.tooltips = {};
+                    that.tooltips[$input.attr('id')] = $tooltip; 
                     
                     $input.addClass('Temporal').removeClass('text').attr('readonly','readonly');
                 }else{
                     $input.removeClass('Temporal').addClass('text').removeAttr("readonly").css('width','20ex');
+                    that._removeTooltip($input.attr('id'));
                 }
             }
             
@@ -5631,7 +5778,7 @@ console.log('onpaste');
                     'a': 'search',
                     'entity': 'defTerms',
                     'details': 'list',
-                    'trm_ID': this.child_terms,
+                    'trm_ID': this.child_terms.join(','),
                     'withimages': 1,
                     'request_id': window.hWin.HEURIST4.util.random()
                 };

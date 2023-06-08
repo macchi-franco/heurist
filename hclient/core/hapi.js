@@ -64,7 +64,7 @@ function hAPI(_db, _oninit, _baseURL) { //, _currentUser
         _listeners = [],
         _is_callserver_in_progress = false,
 
-        _use_debug = false;
+        _use_debug = true;
         
 
     /**
@@ -1131,6 +1131,27 @@ function hAPI(_db, _oninit, _baseURL) { //, _currentUser
             },
 
             /**
+             * Calculate and return the numbers of days, months, and years between two dates
+             * @param data - object containing earliest and latest dates
+             * @param {callserverCallback} callback
+             */
+            get_time_diffs: function(data, callback){
+
+                if(!data || !data.early_date || !data.latest_date){
+                    window.hWin.HEURIST4.msg.showMsgErr('Both an earliest and latest date are required.');
+                    return false;
+                }
+
+                let request = {
+                    a: 'get_time_diffs',
+                    data: JSON.stringify(data),
+                    db: window.hWin.HAPI4.database
+                };
+
+                _callserver('usr_info', request, callback);
+            },
+
+            /**
              * Manipulate folders within HEURIST_FILESTORE_DIR on the server
              * @param {Request} [request] 
              * @param {string} [request.operation] - 'list', 'rename' or 'delete'; defaults to 'list'
@@ -1444,8 +1465,8 @@ function hAPI(_db, _oninit, _baseURL) { //, _currentUser
                 var encode_type = window.hWin.HAPI4.sysinfo['need_encode'];
                 if(!(encode_type>0)) encode_type = 3;
 
-                window.hWin.HEURIST4.util.encodeRequest(request, ['details'], encode_type);
-
+                window.hWin.HEURIST4.util.encodeRequest(request, ['details','details_visibility'], encode_type);
+                
                 _callserver('record_edit', request, function (response) { _triggerRecordUpdateEvent(response, callback); });
             },
 

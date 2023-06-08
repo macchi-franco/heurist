@@ -1089,12 +1089,14 @@ class DbUtils {
             $warnings[] = "Unable to create/copy xsl-templates folder to $database_folder";
         }
 */
+    if(false){ //since 2023-06-02 this folder is not created
         if(folderRecurseCopy( HEURIST_DIR."documentation_and_templates", $database_folder."documentation_and_templates" )){
             
             folderAddIndexHTML($database_folder."documentation_and_templates"); // index file to block directory browsing
         }else{
             $warnings[] = "Unable to create/copy documentation folder to $database_folder";
         }
+    }
 
         // Create all the other standard folders required for the database
         // index.html files are added by createFolder to block index browsing
@@ -1286,6 +1288,12 @@ class DbUtils {
                         if(strtolower($table)=='usrrecpermissions'){
                             $cnt = mysql__select_value($mysqli,'select count(*) from usrRecPermissions');
                             if(!($cnt>0)) continue;
+                        }else if($table=='sysUGrps'){
+                            $cnt = mysql__select_value($mysqli, "SELECT count(*) FROM ". $db_source .".sysUGrps WHERE ugr_Enabled != 'n' AND ugr_Enabled != 'y'");
+
+                            if(is_numeric($cnt) && $cnt > 0){
+                                checkUserStatusColumn(self::$system, $db_target);
+                            }
                         }
                         
                         $mysqli->query("ALTER TABLE `".$table."` DISABLE KEYS");

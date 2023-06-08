@@ -239,7 +239,8 @@ function recordSearchFacets($system, $params){
 
             $select_field  = "dt0.dtl_Value";
             $detail_link   = ", recDetails dt0 ";
-            $details_where = " AND (dt0.dtl_RecID=r0.rec_ID and dt0.dtl_DetailTypeID $compare_field) AND (NULLIF(dt0.dtl_Value, '') is not null)";
+            $details_where = " AND (dt0.dtl_RecID=r0.rec_ID and dt0.dtl_DetailTypeID $compare_field) "
+                            ." AND (NULLIF(dt0.dtl_Value, '') is not null)";
             //$detail_link   = " LEFT JOIN recDetails dt0 ON (dt0.dtl_RecID=r0.rec_ID and dt0.dtl_DetailTypeID=".$fieldid.")";
             //$details_where = " and (dt0.dtl_Value is not null)";
         }
@@ -247,19 +248,26 @@ function recordSearchFacets($system, $params){
         $select_clause = "";
         $grouporder_clause = "";
 
-        if($dt_type=="date"){
+        if($dt_type=='date'){
 
-            $details_where = $details_where.' AND (cast(getTemporalDateString('.$select_field.') as DATETIME) is not null '
-            .'OR (cast(getTemporalDateString('.$select_field.') as SIGNED) is not null  AND '
-            .'cast(getTemporalDateString('.$select_field.') as SIGNED) !=0) )';
+            //select valid dates
+            $select_field = 'dt0.rdi_estMinDate';
+            $detail_link = ', recDetailsDateIndex dt0';
+            $details_where = " AND (dt0.rdi_RecID=r0.rec_ID and dt0.rdi_DetailTypeID $compare_field) ";
+
+            //OLD ' AND (cast(getTemporalDateString('.$select_field.') as DATETIME) is not null ';
+            //OLD .'OR (cast(getTemporalDateString('.$select_field.') as SIGNED) is not null  AND '
+            //OLD .'cast(getTemporalDateString('.$select_field.') as SIGNED) !=0) )';
 
             //for dates we search min and max values to provide data to slider
             //facet_groupby   by year, day, month, decade, century
             if ($facet_groupby=='month') {
+
+
+                $select_field = 'ROUND(dt0.rdi_estMinDate ,2)';
                 
-                $select_field = 'LAST_DAY(cast(getTemporalDateString('.$select_field.') as DATE))';
-                //"DATE_SUB(d,INTERVAL DAYOFMONTH(d)-1 DAY) "; first day
-                //date_add(date_add(LAST_DAY(@date),interval 1 DAY),interval -1 MONTH) AS first_day
+                //OLD $select_field = 'LAST_DAY(cast(getTemporalDateString('.$select_field.') as DATE))';
+
                 $select_clause = "SELECT $select_field as rng, count(*) as cnt ";
                 if($grouporder_clause==''){
                     $grouporder_clause = ' GROUP BY rng ORDER BY rng';
@@ -267,8 +275,8 @@ function recordSearchFacets($system, $params){
                 
             }else if ($facet_groupby=='year' || $facet_groupby=='decade' || $facet_groupby=='century') {
 
-                $select_field = '(cast(getTemporalDateString('.$select_field.') as SIGNED))';
-                //'YEAR(cast(getTemporalDateString('.$select_field.') as DATE))';
+                $select_field = 'ROUND(dt0.rdi_estMinDate ,0)';
+
                 if($facet_groupby=='decade'){
                     $select_field = $select_field.' DIV 10 * 10';
                 }else if($facet_groupby=='century'){
@@ -284,11 +292,11 @@ function recordSearchFacets($system, $params){
             }else{    
 
                 //concat('00',
-                $select_field = "cast(if(cast(getTemporalDateString( $select_field ) as DATETIME) is null,"
-                ."concat('00',cast(getTemporalDateString( $select_field ) as SIGNED),'-1-1'),"  //year
-                ."concat('00',getTemporalDateString( $select_field ))) as DATETIME)";
+                //OLD $select_field = "cast(if(cast(getTemporalDateString( $select_field ) as DATETIME) is null,"
+                //OLD ."concat('00',cast(getTemporalDateString( $select_field ) as SIGNED),'-1-1'),"  //year
+                //OLD ."concat('00',getTemporalDateString( $select_field ))) as DATETIME)";
 
-                $select_clause = "SELECT min($select_field) as min, max($select_field) as max, count(distinct r0.rec_ID) as cnt ";
+                $select_clause = "SELECT min(dt0.rdi_estMinDate) as min, max(dt0.rdi_estMaxDate) as max, count(distinct r0.rec_ID) as cnt ";
 
             }
 
@@ -442,8 +450,8 @@ function recordSearchFacets($system, $params){
 
             while ( $row = $res->fetch_row() ) {
 
-                if((($dt_type=="integer" || $dt_type=="float") && $facet_type==_FT_SELECT)  || 
-                (($dt_type=="year" || $dt_type=="date") && $facet_groupby==null)  ){
+                if((($dt_type=='integer' || $dt_type=='float') && $facet_type==_FT_SELECT)  || 
+                (($dt_type=='year' || $dt_type=='date') && $facet_groupby==null)  ){
                     $third_element = $row[2];          // slider - third parameter is COUNT for range
 					
                     if(!$missingIds && 
@@ -748,10 +756,18 @@ function getDateHistogramData($system, $range, $interval, $rec_ids, $dty_id, $fo
     }
 
     // Get record dates
-    $sql = "SELECT cast(if(cast(concat('00',getTemporalDateString(dtl_Value)) as DATETIME) is null, concat('00',cast(getTemporalDateString(dtl_Value) as SIGNED), '-1-1'), concat('00',getTemporalDateString(dtl_Value))) as DATETIME)
-            FROM recDetails
-            WHERE dtl_RecID IN (".implode(',', $rec_ids).") AND dtl_DetailTypeID = ".$dty_id." AND (NULLIF(dtl_Value, '') is not null) AND (cast(getTemporalDateString(dtl_Value) as DATETIME) is not null OR (cast(getTemporalDateString(dtl_Value) as SIGNED) is not null AND cast(getTemporalDateString(dtl_Value) as SIGNED) != 0))";
+    //OLD $sql = "SELECT cast(if(cast(concat('00',getTemporalDateString(dtl_Value)) as DATETIME) is null, "
+    //OLD                 ."concat('00',cast(getTemporalDateString(dtl_Value) as SIGNED), '-1-1'), concat('00',getTemporalDateString(dtl_Value))) as DATETIME)"
+            //OLD .' FROM recDetails'
+            //OLD .' WHERE dtl_RecID IN ('
+            //OLD .implode(',', $rec_ids).") AND dtl_DetailTypeID = ".$dty_id
+            //OLD ." AND (NULLIF(dtl_Value, '') is not null) AND (cast(getTemporalDateString(dtl_Value) as DATETIME) is not null OR (cast(getTemporalDateString(dtl_Value) as SIGNED) is not null AND cast(getTemporalDateString(dtl_Value) as SIGNED) != 0))";
 
+    $sql = 'SELECT rdi_estMinDate '  //', rdi_estMaxDate'
+            .' FROM recDetailsDateIndex'
+            .' WHERE rdi_RecID IN ('
+                .implode(',', $rec_ids).") AND rdi_DetailTypeID = ".$dty_id; 
+                
     $res = $mysqli->query($sql);
 
     if(!$res){
@@ -759,8 +775,18 @@ function getDateHistogramData($system, $range, $interval, $rec_ids, $dty_id, $fo
     }else{
 
         while($row = $res->fetch_row()){ // cycle through all records
+        
+            //convert from decimal to yyyy-01-01
+            if(round($row[0])==$row[0]){
+                $dt = round($row[0]).'-01-01';
+            }else{
+                $month = substr($row[0],5,2);
+                $day = substr($row[0],7);
+                $dt = round($row[0]).'-'.(($month==0)?'01':str_pad($month,2,'0',STR_PAD_LEFT))
+                                    .'-'.(($day==0)?'01':str_pad($day,2,'0',STR_PAD_LEFT));
+            }    
 
-            $detail_date = new DateTime($row[0]);
+            $detail_date = new DateTime($dt);
             $detail_date->setTime(0,0);
 
             for($k = 0; $k < count($intervals); $k++){ // cycle through classes, add to required count
@@ -1027,9 +1053,11 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
     if(!@$ids){
         return $system->addError(HEURIST_INVALID_REQUEST, 'Invalid search request');
     }
-    if(is_array($ids)){
-        $ids = implode(",", $ids);
-    }
+    
+    $ids = prepareIds($ids);
+    
+    if(count($ids)==0) return array("status"=>HEURIST_OK, 'data'=>array()); //returns empty array
+    
     if(!($direction==1||$direction==-1)){
         $direction = 0;
     }
@@ -1037,9 +1065,9 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
         $link_type = 0;
     }
     if($link_type==2){ //relations only
-        $sRelCond  = 'AND (rl_RelationID IS NOT NULL)';
+        $sRelCond  = ' AND (rl_RelationID IS NOT NULL)';
     }else if($link_type==1){ //links only
-        $sRelCond  = 'AND (rl_RelationID IS NULL)';
+        $sRelCond  = ' AND (rl_RelationID IS NULL)';
     }else{
         $sRelCond = '';
     }
@@ -1063,12 +1091,18 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
     .' WHERE rec_ID=';
 
 
-
+    $swhere = '';
+    if(count($ids)==1){
+        $swhere = '='.$ids[0];
+    }else{
+        $swhere = ' IN ('.implode(',', $ids).')';
+    }
+    
     if($direction>=0){
-
+    
         //find all target related records
         $query = 'SELECT rl_SourceID, rl_TargetID, rl_RelationTypeID, rl_DetailTypeID, rl_RelationID FROM recLinks '
-        .'where rl_SourceID in ('.$ids.') '.$sRelCond.' order by rl_SourceID';
+        .'where rl_SourceID'.$swhere.$sRelCond.' order by rl_SourceID';
 
         $res = $mysqli->query($query);
         if (!$res){
@@ -1078,11 +1112,12 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
                 $relation = new stdClass();
                 $relation->recID = intval($row[0]);
                 $relation->targetID = intval($row[1]);
-                $relation->trmID = intval($row[2]);
-                $relation->dtID  = intval($row[3]);
-                $relation->relationID  = intval($row[4]);
+                $relation->trmID = intval($row[2]); // rl_RelationTypeID
+                $relation->dtID  = intval($row[3]); // rl_DetailTypeID
+                $relation->relationID  = intval($row[4]);  //rl_RelationID
 
                 if($relation->relationID>0) {
+                    
                     $vals = mysql__select_row($mysqli, $query_rel.$relation->relationID);
                     if($vals!=null){
                         $relation->dtl_StartDate = $vals[1];
@@ -1105,7 +1140,7 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
 
         //find all reverse related records
         $query = 'SELECT rl_TargetID, rl_SourceID, rl_RelationTypeID, rl_DetailTypeID, rl_RelationID FROM recLinks '
-        .'where rl_TargetID in ('.$ids.') '.$sRelCond.' order by rl_TargetID';
+        .'where rl_TargetID'.$swhere.$sRelCond.' order by rl_TargetID';
 
 
         $res = $mysqli->query($query);
@@ -1140,9 +1175,6 @@ function recordSearchRelated($system, $ids, $direction=0, $need_headers=true, $l
     //find all rectitles and record types for main recordset AND all related records
     if($need_headers===true){
 
-        if(!is_array($ids)){
-            $ids = explode(',',$ids);
-        }
         $ids = array_merge($ids, $rel_ids);  
 
         $query = 'SELECT rec_ID, rec_Title, rec_RecTypeID, rec_OwnerUGrpID, rec_NonOwnerVisibility from Records '
@@ -1670,6 +1702,7 @@ function recordSearch($system, $params)
     $system->defineConstant('RT_CMS_MENU');
     $system->defineConstant('DT_EXTENDED_DESCRIPTION');
 
+    $useNewTemporalFormatInRecDetails = ($system->get_system('sys_dbSubSubVersion')>=14);
 
     $fieldtypes_in_res = null;
     //search for geo and time fields and remove non timemap records - for rules we need all records
@@ -2468,6 +2501,8 @@ function recordSearch($system, $params)
                         $ruf_entity = new DbRecUploadedFiles($system, null);
                     }
 
+                    $datetime_field_types = mysql__select_list2($mysqli,'select dty_ID from defDetailTypes where dty_Type="date"');
+
                     $loop_cnt=1;                            
                     while ($offset<$res_count){   
 
@@ -2598,7 +2633,17 @@ function recordSearch($system, $params)
                                     }else{
                                         $val = array($row[5], $row[6]); //obfuscated value for fileid and parameters
                                     }
-
+                                    
+                                }else if(in_array($dtyID, $datetime_field_types) && @$row[1]!=null) { 
+                                    //!$useNewTemporalFormatInRecDetails &&     
+                                    //convert date to old plan string temporal object
+                                    $dt = new Temporal($row[1]);
+                                    if($dt->isValidSimple()){
+                                        $val = $dt->getValue(true); //returns simple yyyy-mm-dd
+                                    }else{
+                                        $val = $dt->toPlain(); 
+                                    }
+                                
                                 }else if(@$row[1]!=null) {
                                     $val = $row[1]; //dtl_Value
                                 }
@@ -2985,7 +3030,7 @@ function recordSearchByID($system, $id, $need_details = true, $fields = null)
 }
 
 //
-//
+// Returns value for given field
 //
 function recordGetField($record, $field_id){
 
@@ -3021,6 +3066,8 @@ for geo   geo => array(type=> , wkt=> )
 */
 function recordSearchDetails($system, &$record, $detail_types) {
 
+    $mysqli = $system->get_mysqli();
+
     $recID = $record['rec_ID'];
     
     $squery =
@@ -3040,14 +3087,23 @@ function recordSearchDetails($system, &$record, $detail_types) {
     
     $swhere = " WHERE dtl_RecID = $recID";
 
+    $relmarker_fields = array();
+    
     if(is_array($detail_types) && count($detail_types)>0 ){
 
         if(is_numeric($detail_types[0]) && $detail_types[0]>0){ //by id
             if(count($detail_types)==1){
-                $swhere .= ' AND dtl_DetailTypeID = '.$detail_types[0];
+                $sw = ' AND dtl_DetailTypeID = '.$detail_types[0];
+                $sw2 = ' AND dty_ID = '.$detail_types[0];
             }else{
-                $swhere .= ' AND dtl_DetailTypeID in ('.implode(',',$detail_types).')';    
+                $sw = ' AND dtl_DetailTypeID in ('.implode(',',$detail_types).')';    
+                $sw2 = ' AND dty_ID in ('.implode(',',$detail_types).')'; 
             }
+            $swhere .= $sw;
+            
+            $qr = 'SELECT dty_ID, dty_JsonTermIDTree, dty_PtrTargetRectypeIDs '
+            .'FROM defDetailTypes WHERE dty_Type = "relmarker" '.$sw2;
+            $relmarker_fields =  mysql__select_all($mysqli, $qr);
 
         }else{ //by type
             $swhere .= ' AND dty_Type in ("'.implode('","',$detail_types).'")';
@@ -3086,7 +3142,7 @@ function recordSearchDetails($system, &$record, $detail_types) {
     
     $squery .= $swhere;
 
-    $mysqli = $system->get_mysqli();
+    //main query for details
     $res = $mysqli->query($squery);
 
     $details = array();
@@ -3175,7 +3231,93 @@ function recordSearchDetails($system, &$record, $detail_types) {
 
         $res->close();
     }
+    
+
+    
     $record["details"] = $details;
+}
+
+//
+// Add inofrmation about relationship records int details section of record
+//
+function recordSearchDetailsRelations($system, &$record, $detail_types) {
+
+    $mysqli = $system->get_mysqli();
+
+    $recID = $record['rec_ID'];
+
+    $relmarker_fields = array();
+    
+    if(is_array($detail_types) && count($detail_types)>0 ){
+
+        if(is_numeric($detail_types[0]) && $detail_types[0]>0){ //by id
+            if(count($detail_types)==1){
+                $sw2 = ' AND dty_ID = '.$detail_types[0];
+            }else{
+                $sw2 = ' AND dty_ID in ('.implode(',',$detail_types).')'; 
+            }
+            
+            $qr = 'SELECT dty_ID, dty_JsonTermIDTree, dty_PtrTargetRectypeIDs '
+            .'FROM defDetailTypes WHERE dty_Type = "relmarker" '.$sw2;
+
+        }else{ //by type
+        
+            $qr = 'SELECT dty_ID, dty_JsonTermIDTree, dty_PtrTargetRectypeIDs '
+            .' FROM defDetailTypes, defRecStructure, Records'
+                 .' WHERE rec_ID='.$recID
+                 .' AND dty_ID=rst_DetailTypeID AND rst_RecTypeID=rec_RecTypeID AND dty_Type = "relmarker"';
+        }
+        
+        $relmarker_fields =  mysql__select_all($mysqli, $qr);
+    }    
+    
+    //query for relmarkers
+    if(is_array($relmarker_fields) && count($relmarker_fields)>0){
+        $terms = new DbsTerms($system, dbs_GetTerms($system));
+        
+        // both directions (0), need headers 
+        $related_recs = recordSearchRelated($system, $recID, 0, true, 2);
+        // filter out by allowed relation type and constrained record type
+        
+        foreach ($relmarker_fields as $dty_ID=>$constraints) {
+            
+            $allowed_terms = null; //$terms->treeData($constraints[1], 'set');
+            $constr_rty_ids = explode(',', $constraints[2]);
+            if(count($constr_rty_ids)==0) $constr_rty_ids = false;
+        
+            //find among related record that satisfy contraints
+            foreach ($related_recs['data']['direct'] as $relation){
+                
+                if(!$allowed_terms || in_array($relation->trmID, $allowed_terms)){
+                    
+                    $rty_ID = $related_recs['data']['headers'][$relation->targetID][1]; //rectype id
+                    if(!$constr_rty_ids || in_array($rty_ID, $constr_rty_ids) ){
+                        if(!@$record["details"][$constraints[0]]) $record["details"][$constraints[0]] = array();
+                        $record["details"][$constraints[0]][] = array('id'=>$relation->targetID, 
+                                    'type'=>$rty_ID, 
+                                    'title'=>$related_recs['data']['headers'][$relation->targetID][0],
+                                    'relation_id'=>$relation->relationID);
+                    }
+                }
+            }    
+            foreach ($related_recs['data']['reverse'] as $relation){
+                
+                if(!$allowed_terms || in_array($relation->trmID, $allowed_terms)){
+                    
+                    $rty_ID = $related_recs['data']['headers'][$relation->sourceID][1]; //rectype id
+                    if(!$constr_rty_ids || in_array($rty_ID, $constr_rty_ids) ){
+                        if(!@$record["details"][$constraints[0]]) $record["details"][$constraints[0]] = array();
+                        $record["details"][$constraints[0]][] = array('id'=>$relation->sourceID, 
+                                    'type'=>$rty_ID, 
+                                    'title'=>$related_recs['data']['headers'][$relation->sourceID][0],
+                                    'relation_id'=>$relation->relationID);
+                    }
+                }
+                
+            }    
+        }
+    }    
+    
 }
 
 //
